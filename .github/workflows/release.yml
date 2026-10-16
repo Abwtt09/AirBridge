@@ -1,0 +1,136 @@
+name: Windows release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to build (for example v0.2.0)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - run: git config --global core.autocrlf input
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Check release identity and prevent overwriting
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          $ErrorActionPreference='Stop'
+          $version=(Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ($env:RELEASE_TAG -cne "v$version") { throw 'Tag must match the application version' }
+          $config=Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+          if ($config.version -ne $version) { throw 'Tauri version mismatch' }
+          if (!(Test-Path "docs/releases/v$version.md")) { throw 'Release notes are required' }
+          $existing=gh release view $env:RELEASE_TAG --json isDraft 2>$null
+          if ($LASTEXITCODE -eq 0) { throw 'A release already exists; inspect it instead of overwriting artifacts' }
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy,rustfmt
+          rustup default stable
+      - uses: msys2/setup-msys2@v2
+        id: msys2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-libplist mingw-w64-ucrt-x86_64-openssl
+            mingw-w64-ucrt-x86_64-gstreamer mingw-w64-ucrt-x86_64-gst-plugins-base
+            mingw-w64-ucrt-x86_64-gst-plugins-good mingw-w64-ucrt-x86_64-gst-plugins-bad
+            mingw-w64-ucrt-x86_64-gst-libav
+      - name: Install and check frontend
+        run: |
+          npm ci
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          npm run format:check
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          npm run test:updates
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          npm run build
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Build engine and run native regression probes
+        env:
+          MSYS_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: |
+          ./scripts/build-engine.ps1 -MsysRoot $env:MSYS_ROOT
+          $env:AIRBRIDGE_WORKSPACE=$env:GITHUB_WORKSPACE.Replace('\','/')
+          & "$env:MSYS_ROOT/usr/bin/bash.exe" "$env:GITHUB_WORKSPACE/scripts/build-network-probe.sh"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & "$env:MSYS_ROOT/usr/bin/bash.exe" "$env:GITHUB_WORKSPACE/scripts/build-udp-probe.sh"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Check Rust
+        run: |
+          cargo fmt --manifest-path src-tauri/Cargo.toml --check
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo test --locked --manifest-path src-tauri/Cargo.toml
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Collect matching source and notices
+        env:
+          MSYS_ROOT: ${{ steps.msys2.outputs.msys2-location }}
+        run: |
+          python scripts/collect-native-sources.py --msys-root "$env:MSYS_ROOT"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo vendor --locked --manifest-path src-tauri/Cargo.toml artifacts/cargo-vendor > artifacts/cargo-vendor-config.toml
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python scripts/inventory-release.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Build signed updater artifacts
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if (!$env:TAURI_SIGNING_PRIVATE_KEY) { throw 'Updater signing secret is missing' }
+          npm run tauri -- build
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Package and verify assets
+        run: |
+          python scripts/prepare-release.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ./scripts/verify-release.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-release-assets
+          path: artifacts/release/*
+          retention-days: 7
+      - name: Upload draft then publish complete release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          gh release create $env:RELEASE_TAG --verify-tag --draft --title "AirBridge $env:RELEASE_TAG" --notes-file "docs/releases/$env:RELEASE_TAG.md"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $assets=Get-ChildItem artifacts/release -File | ForEach-Object FullName
+          gh release upload $env:RELEASE_TAG @assets
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          gh release edit $env:RELEASE_TAG --draft=false --latest
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }

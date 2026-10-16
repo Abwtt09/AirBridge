@@ -35,7 +35,7 @@ subprocess.run(['python',str(root/'scripts/collect-frontend-sources.py')],check=
 shutil.copyfile(root/f'artifacts/AirBridge-{version}-source.zip',release/f'AirBridge-{version}-source.zip')
 vendor=root/'artifacts/cargo-vendor'
 assert vendor.is_dir(),'Collect locked Rust dependency sources with cargo vendor first'
-with zipfile.ZipFile(release/f'AirBridge-{version}-rust-sources.zip','w',zipfile.ZIP_DEFLATED,compresslevel=4) as archive:
+with zipfile.ZipFile(release/f'AirBridge-{version}-rust-sources.zip','w',zipfile.ZIP_DEFLATED,compresslevel=4,strict_timestamps=False) as archive:
     for file in sorted(vendor.rglob('*')):
         if file.is_file(): archive.write(file,'vendor/'+file.relative_to(vendor).as_posix())
     archive.writestr('config.toml','[source.crates-io]\nreplace-with = "vendored-sources"\n[source.vendored-sources]\ndirectory = "../vendor"\n')

@@ -86,3 +86,7 @@ Real iPhone discovery, source-to-speaker playback and model recognition were con
 - The newly built native WebView test passed receiver startup, forced child-crash recovery, explicit output selection, event rendering, settings persistence, close-to-tray continuity, stop, graceful quit, diagnostic log display and update controls. Original settings were restored.
 - The harness first needed to drain automatic startup before requesting its own receiver generation; this was a test sequencing issue. The successful complete report is artifacts/ui-smoke.json.
 - A full installed-old-version to installed-new-version upgrade cycle and clean-VM installation remain pending. Signature checks and current-version endpoint checks do not establish those behaviors.
+
+## Published release verification — 2026-10-16
+
+v0.1.0 was published at https://github.com/Abwtt09/AirBridge/releases/tag/v0.1.0. All twelve uploaded assets matched GitHub server-side SHA-256 digests and sizes. The public latest.json endpoint returned version 0.1.0, the expected installer URL and the exact signature. A new real native WebView session checked through Settings → About, displayed “You’re up to date”, and retained receiver advertisement. The test quit gracefully. This confirms current-version discovery, not a full old-to-new installation cycle. The Windows release workflow was validated with actionlint 1.7.12 and registered as active on GitHub; it has not yet run for a subsequent version tag.

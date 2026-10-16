@@ -1,0 +1,14 @@
+{
+  "engine": "UxPlay",
+  "upstream": "https://github.com/FDH2/UxPlay",
+  "commit": "ec203121355220dd90278a369eeabb0b8ba4f14a",
+  "upstreamVersion": "1.74 Experimental",
+  "integrationPatch": "scripts/patch-engine.py",
+  "license": "GPL-3.0-or-later; individual source files retain their own notices",
+  "buildTarget": "Windows 11 x64 UCRT64",
+  "serviceDiscovery": "internal mDNS responder",
+  "audioSink": "GStreamer WASAPI",
+  "capabilities": ["legacyAirPlayAudio", "alacStereo", "aacEld", "applicationGain", "measuredRms"],
+  "unsupported": ["airPlay2Multiroom", "bufferedAirPlay2Audio", "video", "screenMirroring", "drmVideo"],
+  "realIPhoneValidation": "User confirmed stable audible playback and correct model with iPhone 16 / iOS 27 on 2026-10-15; broader hardware and installed-release validation remain pending (docs/VALIDATION.md)"
+}

@@ -1,0 +1,62 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "AirBridge",
+  "version": "0.1.0",
+  "identifier": "dev.airbridge.desktop",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "AirBridge",
+        "width": 460,
+        "height": 650,
+        "minWidth": 400,
+        "minHeight": 560,
+        "resizable": true,
+        "center": true,
+        "decorations": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' asset: data:; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/icon.ico"],
+    "resources": {
+      "../engine/runtime/": "engine/",
+      "../docs/": "docs/",
+      "../LICENSE": "LICENSE",
+      "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
+    },
+    "windows": {
+      "nsis": {
+        "displayLanguageSelector": false,
+        "installMode": "currentUser"
+      }
+    },
+    "shortDescription": "Wireless audio from your iPhone",
+    "longDescription": "A local AirPlay audio receiver using UxPlay and WASAPI.",
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "requireSignedVersion": true,
+      "endpoints": [
+        "https://github.com/Abwtt09/AirBridge/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      },
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg4OTMyNEM1NDQ5MjI1M0QKUldROUpaSkV4U1NUaUlUUlFzdmlDaVVGaFpoQkRUb3haby9NMzZEZ1R3cGxaMkJkd0dJYWc0MnkK"
+    }
+  }
+}
